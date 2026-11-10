@@ -1,0 +1,132 @@
+name: CAISSE MAMINAINA V1.5
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Télécharger le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Installer Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Extraire le projet
+        run: |
+          unzip -o CAISSE_MAMINAINA_V14_GITHUB.zip -d extracted
+          cp -r extracted/www .
+          cp -r extracted/android-plugin .
+          cp extracted/package.json .
+          cp extracted/capacitor.config.json .
+
+      - name: Installer Capacitor
+        run: npm install
+
+      - name: Générer Android
+        run: npx cap add android
+
+      - name: Installer le plugin réseau natif
+        run: |
+          mkdir -p android/app/src/main/java/com/maminaina/caisse
+          cp android-plugin/src/main/java/com/maminaina/caisse/NetworkPrinterPlugin.java android/app/src/main/java/com/maminaina/caisse/
+
+      - name: Enregistrer le plugin Android
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          files = list(Path("android/app/src/main").rglob("MainActivity.java"))
+
+          if not files:
+              raise SystemExit("MainActivity.java introuvable")
+
+          p = files[0]
+          s = p.read_text()
+
+          imp = "import com.maminaina.caisse.NetworkPrinterPlugin;"
+          if imp not in s:
+              s = re.sub(
+                  r'^(package [^;]+;)',
+                  r'\1\n' + imp,
+                  s,
+                  count=1,
+                  flags=re.M
+              )
+
+          marker = "public class MainActivity extends BridgeActivity {"
+
+          if marker not in s:
+              raise SystemExit("Classe MainActivity introuvable")
+
+          if "registerPlugin(NetworkPrinterPlugin.class)" not in s:
+              s = s.replace(
+                  marker,
+                  marker + """
+              @Override
+              public void onCreate(android.os.Bundle savedInstanceState) {
+                  registerPlugin(NetworkPrinterPlugin.class);
+                  super.onCreate(savedInstanceState);
+              }
+          """, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Autorisations réseau
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+
+          permissions = [
+              "INTERNET",
+              "ACCESS_NETWORK_STATE",
+              "ACCESS_WIFI_STATE"
+          ]
+
+          for permission in permissions:
+              tag = f'<uses-permission android:name="android.permission.{permission}" />'
+              if permission not in s:
+                  s = s.replace("<application", tag + "\n    <application", 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Vérifier le module natif
+        run: |
+          grep -n "NetworkPrinter" android/app/src/main/java/com/maminaina/caisse/NetworkPrinterPlugin.java
+          grep -R "registerPlugin(NetworkPrinterPlugin.class)" android/app/src/main/java/
+
+      - name: Synchroniser Android
+        run: npx cap sync android
+
+      - name: Compiler APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Télécharger APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAISSE-MAMINAINA-V15
+          path: android/app/build/outputs/apk/debug/app-debug.apk
