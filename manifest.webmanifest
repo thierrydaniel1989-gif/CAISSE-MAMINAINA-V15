@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "Caisse MAMINAINA",
+  "short_name": "Caisse MAMINAINA",
+  "description": "Application de caisse MAMINAINA",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#0B6E5A",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any"}
+  ]
+}
